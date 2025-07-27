@@ -54,7 +54,7 @@ docker build -t image-pipeline .
 
 **Run the container:**
 ```bash
-docker run --rm -it -v $(pwd):/workspace image-pipeline
+docker run --rm -it -v $(pwd):/home/devuser/workspace image-pipeline
 ```
 
 ---
