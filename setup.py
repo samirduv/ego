@@ -9,6 +9,7 @@ ext_modules = [
         include_dirs=[
             pybind11.get_include(),
             numpy.get_include(),
+            "/usr/include/opencv4"
         ],
         language="c++",
         extra_compile_args=["-O3", "-std=c++11"],
