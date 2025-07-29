@@ -13,7 +13,7 @@ ext_modules = [
         ],
         language="c++",
         extra_compile_args=["-O3", "-std=c++11"],
-        libraries=["opencv_core", "opencv_imgproc"],
+        libraries=["opencv_core", "opencv_imgproc", "opencv_imgcodecs"],
     ),
 ]
 
