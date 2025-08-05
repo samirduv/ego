@@ -8,34 +8,6 @@
 namespace py = pybind11;\
 using namespace cv;
 
-// Function that evaluates the edges of the image to determine the most prominent color
-// used to determine the background color of the image
-uchar getMostDominantBorderColor(const cv::Mat& img) {
-    std::unordered_map<uchar, int> colorCounter;
-
-    for (int x = 0; x < img.cols; ++x) {
-        colorCounter[img.at<uchar>(0, x)]++;
-        colorCounter[img.at<uchar>(img.rows - 1, x)]++;
-    }
-    for (int y = 0; y < img.rows; ++y) {
-        colorCounter[img.at<uchar>(y, 0)]++;
-        colorCounter[img.at<uchar>(y, img.cols - 1)]++;
-    }
-
-    uchar dominantColor = 0;
-    int maxCount = 0;
-    for (const auto& entry : colorCounter) {
-        uchar val = entry.first;
-        int count = entry.second;
-        if (count > maxCount) {
-            dominantColor = val;
-            maxCount = count;
-        }
-    }
-
-    return dominantColor;
-}
-
 py::array_t<uint8_t> blur_largest_shape_in_rect(
     py::array_t<uint8_t> input_array,
     py::tuple rect_tuple,
@@ -79,39 +51,37 @@ py::array_t<uint8_t> blur_largest_shape_in_rect(
     cv::Mat binary;
     cv::threshold(roi_img, binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 
-    uchar borderColor = getMostDominantBorderColor(binary);
+    cv::Mat binary_inverted;
+    cv::threshold(roi_img, binary_inverted, 0, 255, cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
 
-    // Invert binary image if the border color is white (255)
-    if (borderColor == 255) {
-        cv::bitwise_not(binary, binary);
-    }
+
 
     // Find contours
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(binary, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
+    std::vector<std::vector<cv::Point>> contours_inverted;
+    cv::findContours(binary_inverted, contours_inverted, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+    // Combine contours from both binary and inverted binary images
+    contours.insert(contours.end(), contours_inverted.begin(), contours_inverted.end());
+
     if (contours.empty())
         return input_array; // nothing to blur
 
-    // Find largest contour by area
+    // Find largest contour by area   
     size_t largest_idx = 0;
     double max_area = 0.0;
     for (size_t i = 0; i < contours.size(); ++i)
     {
         double area = cv::contourArea(contours[i]);
 
-        // write for debugging
-        // cv::Mat contour_img = cv::Mat::zeros(roi.size(), CV_8UC1);
-        // cv::drawContours(contour_img, contours, static_cast<int>(i), cv::Scalar(255), cv::FILLED);
-        // std::string contour_filename = "contour_" + std::to_string(i) + ".png";
-        // cv::imwrite(contour_filename, contour_img);
-
         if (area > max_area)
         {
             max_area = area;
             largest_idx = i;
         }
-    }     
+    }  
 
     // Create mask for the largest shape
     cv::Mat mask = cv::Mat::zeros(roi.size(), CV_8UC1);
