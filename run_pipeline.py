@@ -12,6 +12,25 @@ def run_pipeline(input_folder: str, output_folder: str, rect_tuple: tuple[int, i
 
         img = cv2.imread(os.path.join(input_folder, filename))
 
+        # check if the rectangle is larger than the image dimensions
+        if img is None:
+            print(f"Could not read image: {filename}. Skipping.")
+            continue
+
+        height, width = img.shape[:2]
+        x, y, w, h = rect_tuple
+
+        if x < 0 or y < 0 or x + w > width or y + h > height:
+            
+            print(f"Rectangle {rect_tuple} is out of bounds for image {filename}. Reducing rectangle to fit.")
+            x = max(0, x)
+            y = max(0, y)
+            w = min(w, width - x)
+            h = min(h, height - y)
+            rect_tuple = (x, y, w, h)
+
+            print(f"Adjusted rectangle to: {rect_tuple}")
+
         blurred_img = cpp_module_edge_detector.blur_largest_shape_in_rect(
             img,
             rect_tuple,
