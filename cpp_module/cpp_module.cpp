@@ -19,10 +19,10 @@ py::array_t<uint8_t> blur_largest_shape_in_rect(
     int width = buf.shape[1];
     int channels = buf.ndim == 3 ? buf.shape[2] : 1;
 
-    cv::Mat input_img(height, width, channels == 3 ? CV_8UC3 : CV_8UC1, buf.ptr);
+    Mat input_img(height, width, channels == 3 ? CV_8UC3 : CV_8UC1, buf.ptr);
 
     // Copy for output
-    cv::Mat output_img = input_img.clone();
+    Mat output_img = input_img.clone();
 
     // Extract rect coordinates
     if (rect_tuple.size() != 4)
@@ -33,38 +33,35 @@ py::array_t<uint8_t> blur_largest_shape_in_rect(
     int w = rect_tuple[2].cast<int>();
     int h = rect_tuple[3].cast<int>();
 
-    cv::Rect roi(x, y, w, h);
+    Rect roi(x, y, w, h);
     if ((x + w > width) || (y + h > height))
         throw std::runtime_error("Rectangle out of image bounds");
 
     // Convert to grayscale for contour detection
-    cv::Mat gray;
+    Mat gray;
     if (channels == 3)
-        cv::cvtColor(input_img, gray, cv::COLOR_BGR2GRAY);
+        cvtColor(input_img, gray, COLOR_BGR2GRAY);
     else
         gray = input_img;  
 
     // Crop to region of interest
-    cv::Mat roi_img = gray(roi);
+    Mat roi_img = gray(roi);
 
-    // write for debugging
-    cv::imwrite("roi.png", roi_img);
-
-    cv::Mat img_blur, img_canny;
+    Mat img_blur, img_canny;
 
     // Blurring image using gaussian fliter. Size(3,3) is SE kernal
-    cv::GaussianBlur(roi_img, img_blur, cv::Size(3, 3), 0);
+    GaussianBlur(gray, img_blur, Size(3, 3), 0);
 
     // edge detection using Canny
-    cv::Canny(img_blur, img_canny, 10, 125);
+    Canny(img_blur, img_canny, 40, 80);
 
     // running dilation to close gaps in edges
-    cv::Mat dilated;
-    cv::dilate(img_canny, dilated, cv::Mat(), cv::Point(-1, -1), 2);
+    Mat dilated;
+    dilate(img_canny, dilated, Mat(), Point(-1, -1), 2);
 
     // Find contours
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(dilated, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+    std::vector<std::vector<Point>> contours;
+    findContours(dilated, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
     if (contours.empty())
         return input_array; // nothing to blur
@@ -74,7 +71,7 @@ py::array_t<uint8_t> blur_largest_shape_in_rect(
     double max_area = 0.0;
     for (size_t i = 0; i < contours.size(); ++i)
     {
-        double area = cv::contourArea(contours[i]);
+        double area = contourArea(contours[i]);
 
         if (area > max_area)
         {
@@ -83,19 +80,8 @@ py::array_t<uint8_t> blur_largest_shape_in_rect(
         }
     }  
 
-    // Create mask for the largest shape
-    cv::Mat mask = cv::Mat::zeros(roi.size(), CV_8UC1);
-    cv::drawContours(mask, contours, static_cast<int>(largest_idx), cv::Scalar(255), cv::FILLED);
-
-    // write for debugging
-    cv::imwrite("mask.png", mask);
-
-    // Blur the ROI and copy only the masked region to output
-    cv::Mat blurred_roi;
-    cv::GaussianBlur(input_img(roi), blurred_roi, cv::Size(blur_kernel, blur_kernel), 0);
-
-    // Apply mask to selectively blur
-    blurred_roi.copyTo(output_img(roi), mask);
+    // Draw red border around the largest shape inside ROI
+    drawContours(output_img(roi), contours, static_cast<int>(largest_idx), Scalar(0, 0, 255), 2);
 
     // Return result as numpy array
     py::array_t<uint8_t> result = py::array_t<uint8_t>(buf.shape);
