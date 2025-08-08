@@ -25,8 +25,7 @@ inline int morph_from_string(const std::string &s) {
     if (s == "blackhat") return cv::MORPH_BLACKHAT;
     throw std::runtime_error("Unknown morph op: " + s + " (expected: none|open|close|gradient|tophat|blackhat)");
 }
-
-py::array_t<uint8_t> outline_largest_shape_in_rect(
+py::array_t<uint8_t> blur_largest_shape_in_rect(
     py::array_t<uint8_t> input_array,
     py::tuple rect_tuple,
     // Gaussian
