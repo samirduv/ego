@@ -44,44 +44,42 @@ py::array_t<uint8_t> blur_largest_shape_in_rect(
     else
         gray = input_img;  
 
-    // Crop to region of interest
-    Mat roi_img = gray(roi);
+    // --- Edge pipeline (ROI only) ---
+    Mat blurred, edges, dilated;
+    GaussianBlur(gray, blurred, Size(3, 3), 0);
+    Canny(blurred, edges, 40, 80);
+    dilate(edges, dilated, Mat(), Point(-1, -1), 2); // close gaps
 
-    Mat img_blur, img_canny;
-
-    // Blurring image using gaussian fliter. Size(3,3) is SE kernal
-    GaussianBlur(gray, img_blur, Size(3, 3), 0);
-
-    // edge detection using Canny
-    Canny(img_blur, img_canny, 40, 80);
-
-    // running dilation to close gaps in edges
-    Mat dilated;
-    dilate(img_canny, dilated, Mat(), Point(-1, -1), 2);
-
-    // Find contours
+    // --- Contours in ROI ---
     std::vector<std::vector<Point>> contours;
     findContours(dilated, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
     if (contours.empty())
         return input_array; // nothing to blur
 
-    // Find largest contour by area   
+    // --- Largest contour by area ---
     size_t largest_idx = 0;
     double max_area = 0.0;
-    for (size_t i = 0; i < contours.size(); ++i)
-    {
-        double area = contourArea(contours[i]);
+    for (size_t i = 0; i < contours.size(); ++i) {
+        double a = contourArea(contours[i]);
+        if (a > max_area) { max_area = a; largest_idx = i; }
+    }
 
-        if (area > max_area)
-        {
-            max_area = area;
-            largest_idx = i;
-        }
-    }  
+    // --- Approx to polygon ---
+    const auto &c = contours[largest_idx];
+    double peri = arcLength(c, true);
+    std::vector<Point> poly;
+    approxPolyDP(c, poly, 0.02 * peri, true); // tune 0.01–0.03
 
-    // Draw red border around the largest shape inside ROI
-    drawContours(output_img(roi), contours, static_cast<int>(largest_idx), Scalar(0, 0, 255), 2);
+    if (!poly.empty()) {
+        // Draw red if BGR, else white if single-channel
+        Scalar color = (channels == 3) ? Scalar(0, 0, 255) : Scalar(255);
+
+        // polylines expects a vector<vector<Point>>; draw on ROI of output
+        polylines(output_img(roi),
+                  std::vector<std::vector<Point>>{poly},
+                  true, color, 2, LINE_AA);
+    }
 
     // Return result as numpy array
     py::array_t<uint8_t> result = py::array_t<uint8_t>(buf.shape);
